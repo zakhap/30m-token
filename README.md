@@ -1,68 +1,109 @@
-# v4-template
-### **A template for writing Uniswap v4 Hooks 🦄**
+# TimeWindowHook - Uniswap v4 30-Minute Trading Window
 
-[`Use this Template`](https://github.com/uniswapfoundation/v4-template/generate)
+A Uniswap v4 hook that restricts trading to a 30-minute window each week. This hook demonstrates how to implement time-based restrictions for Uniswap v4 pools.
 
-1. The example hook [Counter.sol](src/Counter.sol) demonstrates the `beforeSwap()` and `afterSwap()` hooks
-2. The test template [Counter.t.sol](test/Counter.t.sol) preconfigures the v4 pool manager, test tokens, and test liquidity.
+## Features
 
-<details>
-<summary>Updating to v4-template:latest</summary>
+- Restricts trading to a 30-minute window each week
+- Immutable window parameters set at deployment time
+- Simple and gas-efficient implementation using modulo arithmetic
+- Helpful error messages when users attempt to trade outside the window
+- View functions to check when the next trading window will open
 
-This template is actively maintained -- you can update the v4 dependencies, scripts, and helpers: 
-```bash
-git remote add template https://github.com/uniswapfoundation/v4-template
-git fetch template
-git merge template/main <BRANCH> --allow-unrelated-histories
-```
+## Hook Implementation
 
-</details>
+The TimeWindowHook uses the `beforeSwap` hook to check if the current timestamp falls within an allowed trading window. If not, it reverts the transaction with a clear error message providing information about when the next window will open.
 
----
+Key functions:
+- `isWindowActive()`: Checks if trading is currently allowed
+- `getNextWindowTime()`: Calculates when the next trading window will open
+- `getWindowEndTime()`: Calculates when the current/next window will close
 
-### Check Forge Installation
-*Ensure that you have correctly installed Foundry (Forge) Stable. You can update Foundry by running:*
+## How to Use
 
-```
-foundryup
-```
-
-> *v4-template* appears to be _incompatible_ with Foundry Nightly. See [foundry announcements](https://book.getfoundry.sh/announcements) to revert back to the stable build
-
-
-
-## Set up
+### Setup
 
 *requires [foundry](https://book.getfoundry.sh)*
 
-```
+```bash
 forge install
 forge test
 ```
 
-### Local Development (Anvil)
-
-Other than writing unit tests (recommended!), you can only deploy & test hooks on [anvil](https://book.getfoundry.sh/anvil/)
+### Local Testing
 
 ```bash
 # start anvil, a local EVM chain
 anvil
 
-# in a new terminal
-forge script script/Anvil.s.sol \
+# Deploy everything in one go (hook, pool, and test swaps)
+forge script script/TimeWindowAnvil.s.sol \
     --rpc-url http://localhost:8545 \
     --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
     --broadcast
 ```
 
-See [script/](script/) for hook deployment, pool creation, liquidity provision, and swapping.
+### Step by Step Deployment
+
+```bash
+# 1. Deploy the hook
+forge script script/00_TimeWindowHook.s.sol \
+    --rpc-url http://localhost:8545 \
+    --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
+    --broadcast
+
+# 2. Create a pool with the hook (set TIME_WINDOW_HOOK_ADDRESS to the deployed hook address)
+forge script script/01_CreateTimeWindowPool.s.sol \
+    --rpc-url http://localhost:8545 \
+    --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
+    --broadcast \
+    --env TIME_WINDOW_HOOK_ADDRESS=0x...
+
+# 3. Try swapping in the pool
+forge script script/03_SwapTimeWindow.s.sol \
+    --rpc-url http://localhost:8545 \
+    --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
+    --broadcast \
+    --env TIME_WINDOW_HOOK_ADDRESS=0x...
+```
+
+## Customizing Window Parameters
+
+You can customize the window parameters by setting environment variables:
+
+```bash
+# Set custom window parameters
+WINDOW_START=1718380800 # Unix timestamp for when the first window starts
+WINDOW_DURATION=1800    # Duration in seconds (30 minutes)
+WINDOW_INTERVAL=604800  # Interval in seconds (7 days)
+
+forge script script/00_TimeWindowHook.s.sol \
+    --rpc-url http://localhost:8545 \
+    --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
+    --broadcast \
+    --env WINDOW_START=$WINDOW_START \
+    --env WINDOW_DURATION=$WINDOW_DURATION \
+    --env WINDOW_INTERVAL=$WINDOW_INTERVAL
+```
+
+## Testing in Different Time Windows
+
+To test trading during or outside the window, you can set the block timestamp:
+
+```bash
+# Test with a specific timestamp to simulate being in an active window
+forge script script/03_SwapTimeWindow.s.sol \
+    --rpc-url http://localhost:8545 \
+    --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
+    --broadcast \
+    --env TIME_WINDOW_HOOK_ADDRESS=0x... \
+    --block-timestamp 1718381100  # A timestamp during an active window
+```
 
 ---
 
 <details>
 <summary><h2>Troubleshooting</h2></summary>
-
-
 
 ### *Permission Denied*
 
@@ -88,7 +129,7 @@ Hook deployment failures are caused by incorrect flags or incorrect salt mining
 
 ---
 
-Additional resources:
+## Additional Resources
 
 [Uniswap v4 docs](https://docs.uniswap.org/contracts/v4/overview)
 
@@ -97,4 +138,3 @@ Additional resources:
 [v4-core](https://github.com/uniswap/v4-core)
 
 [v4-by-example](https://v4-by-example.org)
-

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.24;
 
 import "forge-std/Script.sol";
 import {IHooks} from "v4-core/src/interfaces/IHooks.sol";
@@ -14,7 +14,7 @@ import {MockERC20} from "solmate/src/test/utils/mocks/MockERC20.sol";
 import {Constants} from "v4-core/src/../test/utils/Constants.sol";
 import {TickMath} from "v4-core/src/libraries/TickMath.sol";
 import {CurrencyLibrary, Currency} from "v4-core/src/types/Currency.sol";
-import {Counter} from "../src/Counter.sol";
+import {TimeWindowHook} from "../src/TimeWindowHook.sol";
 import {HookMiner} from "v4-periphery/src/utils/HookMiner.sol";
 import {IPositionManager} from "v4-periphery/src/interfaces/IPositionManager.sol";
 import {PositionManager} from "v4-periphery/src/PositionManager.sol";
@@ -25,8 +25,8 @@ import {IERC20} from "forge-std/interfaces/IERC20.sol";
 import {IPositionDescriptor} from "v4-periphery/src/interfaces/IPositionDescriptor.sol";
 import {IWETH9} from "v4-periphery/src/interfaces/external/IWETH9.sol";
 
-/// @notice Forge script for deploying v4 & hooks to **anvil**
-contract CounterScript is Script, DeployPermit2 {
+/// @notice Forge script for deploying TimeWindowHook to **anvil**
+contract TimeWindowAnvilScript is Script, DeployPermit2 {
     using EasyPosm for IPositionManager;
 
     address constant CREATE2_DEPLOYER = address(0x4e59b44847b379578588920cA78FbF26c0B4956C);
@@ -35,28 +35,60 @@ contract CounterScript is Script, DeployPermit2 {
     PoolModifyLiquidityTest lpRouter;
     PoolSwapTest swapRouter;
 
-    function setUp() public {}
+    // Window settings
+    uint256 public windowStart;
+    uint256 public windowDuration = 1800; // 30 minutes
+    uint256 public windowInterval = 604800; // 7 days
+
+    function setUp() public {
+        // Use environment variables if provided, otherwise use defaults
+        windowStart = vm.envOr("WINDOW_START", block.timestamp);
+    }
 
     function run() public {
         vm.broadcast();
         manager = deployPoolManager();
 
         // hook contracts must have specific flags encoded in the address
-        uint160 permissions = uint160(
-            Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG | Hooks.BEFORE_ADD_LIQUIDITY_FLAG
-                | Hooks.BEFORE_REMOVE_LIQUIDITY_FLAG
-        );
+        uint160 permissions = uint160(Hooks.BEFORE_SWAP_FLAG);
 
         // Mine a salt that will produce a hook address with the correct permissions
-        (address hookAddress, bytes32 salt) =
-            HookMiner.find(CREATE2_DEPLOYER, permissions, type(Counter).creationCode, abi.encode(address(manager)));
+        bytes memory constructorArgs = abi.encode(
+            address(manager),
+            windowStart,
+            windowDuration,
+            windowInterval
+        );
+        
+        (address hookAddress, bytes32 salt) = HookMiner.find(
+            CREATE2_DEPLOYER,
+            permissions,
+            type(TimeWindowHook).creationCode,
+            constructorArgs
+        );
 
         // ----------------------------- //
         // Deploy the hook using CREATE2 //
         // ----------------------------- //
         vm.broadcast();
-        Counter counter = new Counter{salt: salt}(manager);
-        require(address(counter) == hookAddress, "CounterScript: hook address mismatch");
+        TimeWindowHook hook = new TimeWindowHook{salt: salt}(
+            manager,
+            windowStart,
+            windowDuration,
+            windowInterval
+        );
+        require(address(hook) == hookAddress, "TimeWindowAnvilScript: hook address mismatch");
+
+        console.log("TimeWindowHook deployed at:", address(hook));
+        console.log("Window settings:");
+        console.log("  Start:", windowStart);
+        console.log("  Duration:", windowDuration, "seconds");
+        console.log("  Interval:", windowInterval, "seconds");
+        
+        uint256 nextWindow = hook.getNextWindowTime();
+        console.log("Next trading window starts at:", nextWindow);
+        console.log("Next trading window ends at:", nextWindow + windowDuration);
+        console.log("Window active now:", hook.isWindowActive() ? "YES" : "NO");
 
         // Additional helpers for interacting with the pool
         vm.startBroadcast();
@@ -66,7 +98,7 @@ contract CounterScript is Script, DeployPermit2 {
 
         // test the lifecycle (create pool, add liquidity, swap)
         vm.startBroadcast();
-        testLifecycle(address(counter));
+        testLifecycle(address(hook));
         vm.stopBroadcast();
     }
 
@@ -137,8 +169,18 @@ contract CounterScript is Script, DeployPermit2 {
         int24 tickUpper = TickMath.maxUsableTick(tickSpacing);
         _exampleAddLiquidity(poolKey, tickLower, tickUpper);
 
-        // swap some tokens
-        _exampleSwap(poolKey);
+        // Check if window is active before attempting swap
+        TimeWindowHook timeHook = TimeWindowHook(hook);
+        if (timeHook.isWindowActive()) {
+            console.log("Trading window is active. Attempting swap...");
+            // swap some tokens
+            _exampleSwap(poolKey);
+        } else {
+            console.log("Trading window is NOT active. Skipping swap test.");
+            console.log("Next window starts at:", timeHook.getNextWindowTime());
+            console.log("To test swapping, run this script with:");
+            console.log("  forge script script/TimeWindowAnvil.s.sol --rpc-url ... --block-timestamp", timeHook.getNextWindowTime() + 10);
+        }
     }
 
     function _exampleAddLiquidity(PoolKey memory poolKey, int24 tickLower, int24 tickUpper) internal {
@@ -158,8 +200,17 @@ contract CounterScript is Script, DeployPermit2 {
             amountSpecified: amountSpecified,
             sqrtPriceLimitX96: zeroForOne ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1 // unlimited impact
         });
-        PoolSwapTest.TestSettings memory testSettings =
-            PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false});
-        swapRouter.swap(poolKey, params, testSettings, "");
+        PoolSwapTest.TestSettings memory testSettings = PoolSwapTest.TestSettings({
+            takeClaims: false,
+            settleUsingBurn: false
+        });
+        
+        try swapRouter.swap(poolKey, params, testSettings, "") {
+            console.log("Swap successful!");
+        } catch Error(string memory reason) {
+            console.log("Swap failed with reason:", reason);
+        } catch (bytes memory) {
+            console.log("Swap failed with no reason");
+        }
     }
 }
