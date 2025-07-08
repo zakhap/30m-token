@@ -32,9 +32,24 @@ forge test
 
 ### Local Testing
 
+First, create a `.env` file with your Alchemy API key:
+
 ```bash
-# start anvil, a local EVM chain
-anvil
+# .env
+ALCHEMY_API_KEY=your_alchemy_api_key_here
+```
+
+Then source it and run anvil:
+
+```bash
+# Load environment variables
+source .env
+
+# start anvil with mainnet fork (recommended for Uniswap v4 testing)
+anvil --fork-url https://eth-mainnet.g.alchemy.com/v2/$ALCHEMY_API_KEY
+
+# For realistic mainnet simulation, use 12-second block times
+anvil --fork-url https://eth-mainnet.g.alchemy.com/v2/$ALCHEMY_API_KEY --block-time 12
 
 # Deploy everything in one go (hook, pool, and test swaps)
 forge script script/TimeWindowAnvil.s.sol \
@@ -42,6 +57,8 @@ forge script script/TimeWindowAnvil.s.sol \
     --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
     --broadcast
 ```
+
+**Note**: Using a mainnet fork is recommended as it provides access to existing Uniswap v4 infrastructure and realistic testing conditions. Get your Alchemy API key from [alchemy.com](https://www.alchemy.com/). Make sure to add `.env` to your `.gitignore` file.
 
 ### Step by Step Deployment
 
@@ -98,6 +115,50 @@ forge script script/03_SwapTimeWindow.s.sol \
     --broadcast \
     --env TIME_WINDOW_HOOK_ADDRESS=0x... \
     --block-timestamp 1718381100  # A timestamp during an active window
+```
+
+## Testing Hook Read Functions
+
+Use these `cast` commands to test TimeWindowHook read functions:
+
+```bash
+# Set your hook address (replace with actual deployed address)
+export HOOK_ADDRESS="0x..."
+
+# Test immutable window parameters
+cast call $HOOK_ADDRESS "windowStart()" --rpc-url http://localhost:8545
+cast call $HOOK_ADDRESS "windowDuration()" --rpc-url http://localhost:8545  
+cast call $HOOK_ADDRESS "windowInterval()" --rpc-url http://localhost:8545
+
+# Test current window status
+cast call $HOOK_ADDRESS "isWindowActive()" --rpc-url http://localhost:8545
+
+# Test window timing functions
+cast call $HOOK_ADDRESS "getNextWindowTime()" --rpc-url http://localhost:8545
+cast call $HOOK_ADDRESS "getWindowEndTime()" --rpc-url http://localhost:8545
+
+# Test hook permissions
+cast call $HOOK_ADDRESS "getHookPermissions()" --rpc-url http://localhost:8545
+
+# Convert to human readable formats
+# Timestamps (Linux)
+cast call $HOOK_ADDRESS "windowStart()" --rpc-url http://localhost:8545 | xargs printf "%d\n" | xargs -I {} date -d @{}
+cast call $HOOK_ADDRESS "getNextWindowTime()" --rpc-url http://localhost:8545 | xargs printf "%d\n" | xargs -I {} date -d @{}
+cast call $HOOK_ADDRESS "getWindowEndTime()" --rpc-url http://localhost:8545 | xargs printf "%d\n" | xargs -I {} date -d @{}
+
+# Timestamps (macOS)
+cast call $HOOK_ADDRESS "windowStart()" --rpc-url http://localhost:8545 | xargs printf "%d\n" | xargs -I {} date -r {}
+cast call $HOOK_ADDRESS "getNextWindowTime()" --rpc-url http://localhost:8545 | xargs printf "%d\n" | xargs -I {} date -r {}
+cast call $HOOK_ADDRESS "getWindowEndTime()" --rpc-url http://localhost:8545 | xargs printf "%d\n" | xargs -I {} date -r {}
+
+# Duration in minutes
+cast call $HOOK_ADDRESS "windowDuration()" --rpc-url http://localhost:8545 | xargs printf "%d\n" | xargs -I {} echo "$(({} / 60)) minutes"
+
+# Interval in days
+cast call $HOOK_ADDRESS "windowInterval()" --rpc-url http://localhost:8545 | xargs printf "%d\n" | xargs -I {} echo "$(({} / 86400)) days"
+
+# Window status with color
+cast call $HOOK_ADDRESS "isWindowActive()" --rpc-url http://localhost:8545 | grep -q "0x0000000000000000000000000000000000000000000000000000000000000001" && echo "✅ Window ACTIVE" || echo "❌ Window INACTIVE"
 ```
 
 ---

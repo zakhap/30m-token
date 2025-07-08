@@ -19,8 +19,8 @@ contract TimeWindowHookScript is Script, Constants {
     function setUp() public {
         // Use environment variables if provided, otherwise use defaults
         windowStart = vm.envOr("WINDOW_START", block.timestamp);
-        windowDuration = vm.envOr("WINDOW_DURATION", uint256(1800)); // 30 minutes
-        windowInterval = vm.envOr("WINDOW_INTERVAL", uint256(604800)); // 7 days
+        windowDuration = vm.envOr("WINDOW_DURATION", uint256(60)); // 1 minutes
+        windowInterval = vm.envOr("WINDOW_INTERVAL", uint256(120)); // 2 minutes
     }
 
     function run() public {

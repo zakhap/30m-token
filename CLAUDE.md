@@ -81,6 +81,49 @@ Scripts support customization via environment variables:
 - `WINDOW_INTERVAL`: Interval between windows (default: 604800 = 7 days)
 - `TIME_WINDOW_HOOK_ADDRESS`: Address of deployed hook for subsequent scripts
 
+### Testing Hook Read Functions
+Use these `cast` commands to test TimeWindowHook read functions:
+
+```bash
+# Set your hook address (replace with actual deployed address)
+export HOOK_ADDRESS="0x..."
+
+# Test immutable window parameters
+cast call $HOOK_ADDRESS "windowStart()" --rpc-url http://localhost:8545
+cast call $HOOK_ADDRESS "windowDuration()" --rpc-url http://localhost:8545  
+cast call $HOOK_ADDRESS "windowInterval()" --rpc-url http://localhost:8545
+
+# Test current window status
+cast call $HOOK_ADDRESS "isWindowActive()" --rpc-url http://localhost:8545
+
+# Test window timing functions
+cast call $HOOK_ADDRESS "getNextWindowTime()" --rpc-url http://localhost:8545
+cast call $HOOK_ADDRESS "getWindowEndTime()" --rpc-url http://localhost:8545
+
+# Test hook permissions
+cast call $HOOK_ADDRESS "getHookPermissions()" --rpc-url http://localhost:8545
+
+# Convert to human readable formats
+# Timestamps (Linux)
+cast call $HOOK_ADDRESS "windowStart()" --rpc-url http://localhost:8545 | xargs printf "%d\n" | xargs -I {} date -d @{}
+cast call $HOOK_ADDRESS "getNextWindowTime()" --rpc-url http://localhost:8545 | xargs printf "%d\n" | xargs -I {} date -d @{}
+cast call $HOOK_ADDRESS "getWindowEndTime()" --rpc-url http://localhost:8545 | xargs printf "%d\n" | xargs -I {} date -d @{}
+
+# Timestamps (macOS)
+cast call $HOOK_ADDRESS "windowStart()" --rpc-url http://localhost:8545 | xargs printf "%d\n" | xargs -I {} date -r {}
+cast call $HOOK_ADDRESS "getNextWindowTime()" --rpc-url http://localhost:8545 | xargs printf "%d\n" | xargs -I {} date -r {}
+cast call $HOOK_ADDRESS "getWindowEndTime()" --rpc-url http://localhost:8545 | xargs printf "%d\n" | xargs -I {} date -r {}
+
+# Duration in minutes
+cast call $HOOK_ADDRESS "windowDuration()" --rpc-url http://localhost:8545 | xargs printf "%d\n" | xargs -I {} echo "$(({} / 60)) minutes"
+
+# Interval in days
+cast call $HOOK_ADDRESS "windowInterval()" --rpc-url http://localhost:8545 | xargs printf "%d\n" | xargs -I {} echo "$(({} / 86400)) days"
+
+# Window status with color
+cast call $HOOK_ADDRESS "isWindowActive()" --rpc-url http://localhost:8545 | grep -q "0x0000000000000000000000000000000000000000000000000000000000000001" && echo "✅ Window ACTIVE" || echo "❌ Window INACTIVE"
+```
+
 ### Library Remappings
 Located in `remappings.txt`:
 - `v4-core/`: Uniswap v4 core contracts
