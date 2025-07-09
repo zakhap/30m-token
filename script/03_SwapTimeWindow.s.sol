@@ -29,7 +29,7 @@ contract SwapTimeWindowScript is Script, Constants, Config {
     address public timeWindowHookAddress;
 
     // Amount to swap
-    int256 public amountSpecified = -0.01e18; // negative = exact input (e.g. selling 0.01 ETH)
+    int256 public amountSpecified = -100e18; // negative = exact input (e.g. selling 100 ETH)
     bool public zeroForOne = true; // true = token0 to token1, false = token1 to token0
     
     // Constants for price limits
@@ -61,7 +61,10 @@ contract SwapTimeWindowScript is Script, Constants, Config {
 
         // Print information about the time window hook
         TimeWindowHook hook = TimeWindowHook(timeWindowHookAddress);
-        console.log("Attempting swap with TimeWindowHook at:", timeWindowHookAddress);
+        console.log("Attempting swap in ETH/TEST pool with TimeWindowHook at:", timeWindowHookAddress);
+        console.log("Pool configuration:");
+        console.log("  currency0 (ETH):", Currency.unwrap(currency0));
+        console.log("  currency1 (TEST):", Currency.unwrap(currency1));
         console.log("Window settings:");
         console.log("  Start:", hook.windowStart());
         console.log("  Duration:", hook.windowDuration(), "seconds");
@@ -72,6 +75,10 @@ contract SwapTimeWindowScript is Script, Constants, Config {
         console.log("Next trading window ends at:", nextWindow + hook.windowDuration());
         console.log("Current time:", block.timestamp);
         console.log("Window active:", hook.isWindowActive() ? "YES" : "NO");
+        
+        // Check balances
+        console.log("Deployer ETH balance:", address(msg.sender).balance);
+        console.log("Deployer TEST balance:", token1.balanceOf(msg.sender));
 
         if (!hook.isWindowActive()) {
             console.log("WARNING: Trading window is not active. Swap will likely fail.");
@@ -107,7 +114,7 @@ contract SwapTimeWindowScript is Script, Constants, Config {
             settleUsingBurn: false
         });
 
-        console.log("Attempting swap:", zeroForOne ? "token0 -> token1" : "token1 -> token0");
+        console.log("Attempting swap:", zeroForOne ? "ETH -> TEST" : "TEST -> ETH");
         console.log("Amount:", uint256(zeroForOne ? -amountSpecified : amountSpecified));
 
         // Value to send if swapping ETH

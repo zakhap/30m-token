@@ -31,8 +31,8 @@ contract CreateTimeWindowPoolScript is Script, Constants, Config {
     uint160 startingPrice = 79228162514264337593543950336; // floor(sqrt(1) * 2^96)
 
     // --- liquidity position configuration --- //
-    uint256 public token0Amount = 1e18;
-    uint256 public token1Amount = 1e18;
+    uint256 public token0Amount =  1e18;                      // 1ETH
+    uint256 public token1Amount = 9_989_990_000 * 10**18;        // 0.1001% kept for funding projects
 
     // range of the position
     int24 tickLower = -600; // must be a multiple of tickSpacing
@@ -78,7 +78,7 @@ contract CreateTimeWindowPoolScript is Script, Constants, Config {
         uint256 amount1Max = token1Amount + 1 wei;
 
         (bytes memory actions, bytes[] memory mintParams) =
-            _mintLiquidityParams(pool, tickLower, tickUpper, liquidity, amount0Max, amount1Max, address(this), hookData);
+            _mintLiquidityParams(pool, tickLower, tickUpper, liquidity, amount0Max, amount1Max, msg.sender, hookData);
 
         // multicall parameters
         bytes[] memory params = new bytes[](2);
@@ -100,7 +100,11 @@ contract CreateTimeWindowPoolScript is Script, Constants, Config {
 
         // Print information about the time window hook
         TimeWindowHook hook = TimeWindowHook(timeWindowHookAddress);
-        console.log("Creating pool with TimeWindowHook at:", timeWindowHookAddress);
+        console.log("Creating ETH/TEST pool with TimeWindowHook at:", timeWindowHookAddress);
+        console.log("Pool configuration:");
+        console.log("  currency0 (ETH):", Currency.unwrap(currency0));
+        console.log("  currency1 (TEST):", Currency.unwrap(currency1));
+        console.log("  Initial liquidity: %s ETH + %s TEST", token0Amount, token1Amount);
         console.log("Window settings:");
         console.log("  Start:", hook.windowStart());
         console.log("  Duration:", hook.windowDuration(), "seconds");
@@ -109,6 +113,10 @@ contract CreateTimeWindowPoolScript is Script, Constants, Config {
         uint256 nextWindow = hook.getNextWindowTime();
         console.log("Next trading window starts at:", nextWindow);
         console.log("Next trading window ends at:", nextWindow + hook.windowDuration());
+        
+        // Check ETH balance
+        console.log("Deployer ETH balance:", address(msg.sender).balance);
+        console.log("Deployer TEST balance:", token1.balanceOf(msg.sender));
         
         // multicall to atomically create pool & add liquidity
         vm.broadcast();
@@ -136,10 +144,12 @@ contract CreateTimeWindowPoolScript is Script, Constants, Config {
     }
 
     function tokenApprovals() public {
+        // ETH (currency0) doesn't need approval
         if (!currency0.isAddressZero()) {
             token0.approve(address(PERMIT2), type(uint256).max);
             PERMIT2.approve(address(token0), address(posm), type(uint160).max, type(uint48).max);
         }
+        // TEST token (currency1) needs approval
         if (!currency1.isAddressZero()) {
             token1.approve(address(PERMIT2), type(uint256).max);
             PERMIT2.approve(address(token1), address(posm), type(uint160).max, type(uint48).max);
