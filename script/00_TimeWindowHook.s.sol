@@ -62,5 +62,8 @@ contract TimeWindowHookScript is Script, Constants {
         uint256 nextWindow = hook.getNextWindowTime();
         console.log("Next trading window starts at:", nextWindow);
         console.log("Next trading window ends at:", nextWindow + windowDuration);
+        console.log("");
+        console.log("Set this address as TIME_WINDOW_HOOK_ADDRESS:");
+        console.log("export TIME_WINDOW_HOOK_ADDRESS=%s", address(hook));
     }
 }

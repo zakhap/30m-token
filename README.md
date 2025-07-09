@@ -4,11 +4,12 @@ A Uniswap v4 hook that restricts trading to a 30-minute window each week. This h
 
 ## Features
 
-- Restricts trading to a 30-minute window each week
+- Restricts trading to configurable time windows (default: 1 minute every 2 minutes for testing)
 - Immutable window parameters set at deployment time
 - Simple and gas-efficient implementation using modulo arithmetic
 - Helpful error messages when users attempt to trade outside the window
 - View functions to check when the next trading window will open
+- ETH/TEST token pool for easy testing with controlled token supply
 
 ## Hook Implementation
 
@@ -69,19 +70,27 @@ forge script script/00_TimeWindowHook.s.sol \
     --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
     --broadcast
 
-# 2. Create a pool with the hook (set TIME_WINDOW_HOOK_ADDRESS to the deployed hook address)
+# 2. Deploy the TEST token
+forge script script/00a_DeployTestToken.s.sol \
+    --rpc-url http://localhost:8545 \
+    --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
+    --broadcast
+
+# 3. Set environment variables (use the addresses from steps 1 and 2)
+export TIME_WINDOW_HOOK_ADDRESS=0x...
+export TEST_TOKEN_ADDRESS=0x...
+
+# 4. Create ETH/TEST pool with the hook and add initial liquidity
 forge script script/01_CreateTimeWindowPool.s.sol \
     --rpc-url http://localhost:8545 \
     --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
-    --broadcast \
-    --env TIME_WINDOW_HOOK_ADDRESS=0x...
+    --broadcast
 
-# 3. Try swapping in the pool
+# 5. Try swapping in the pool (ETH <-> TEST)
 forge script script/03_SwapTimeWindow.s.sol \
     --rpc-url http://localhost:8545 \
     --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
-    --broadcast \
-    --env TIME_WINDOW_HOOK_ADDRESS=0x...
+    --broadcast
 ```
 
 ## Customizing Window Parameters
